@@ -1,0 +1,355 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          String    @default("employee") // super_admin, hr_manager, manager, employee
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  employee      Employee?
+  auditLogs     AuditLog[]
+  notifications Notification[]
+}
+
+// Employee model
+model Employee {
+  id              String   @id @default(cuid())
+
+  // Link to User for authentication
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal Info
+  employeeCode    String   @unique
+  biometricId     String?  @unique // ID from biometric attendance system
+  phone           String?
+  address         String?  @db.Text
+  dateOfBirth     DateTime?
+  nationality     String?
+  gender          String?
+  profileImage    String?  @db.Text
+  cnicNumber      String?  // Pakistani national ID card number
+  passportNumber  String?  // Passport number
+
+  // Emergency Contact
+  emergencyContactName     String?
+  emergencyContactNumber   String?
+  emergencyContactRelation String?
+
+  // Employment Details
+  departmentId    String?
+  department      Department? @relation(fields: [departmentId], references: [id])
+  designation     String?
+  dateOfJoining   DateTime
+  probationCompleteDate DateTime? // Date when probation period ends
+  employmentType  String   @default("full_time") // full_time, part_time, contract
+  employmentStatus String  @default("probation") // probation, permanent
+  status          String   @default("active") // active, inactive, terminated
+
+  // Manager
+  managerId       String?
+  manager         Employee? @relation("ManagerSubordinates", fields: [managerId], references: [id])
+  subordinates    Employee[] @relation("ManagerSubordinates")
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  attendance              AttendanceRecord[]
+  leaveRequests           LeaveRequest[]
+  leaveBalances           LeaveBalance[]
+  fines                   Fine[]
+  incentives              Incentive[]
+  history                 EmployeeHistory[]
+  documents               EmployeeDocument[]
+  monthlyDeductibleFines  MonthlyDeductibleFine[]
+  evaluations             EmployeeEvaluation[]
+}
+
+// Department model
+model Department {
+  id                 String       @id @default(cuid())
+  name               String       @unique
+  description        String?
+  isActive           Boolean      @default(true)
+  parentDepartmentId String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  // Self-referential relationship for hierarchy
+  parentDepartment   Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id], onDelete: Restrict)
+  childDepartments   Department[] @relation("DepartmentHierarchy")
+
+  employees          Employee[]
+}
+
+// Attendance Record
+model AttendanceRecord {
+  id              String   @id @default(cuid())
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  checkIn         String?
+  checkOut        String?
+  status          String   // on_time, late, absent, half_day, leave
+  lateMinutes     Int      @default(0)
+  isCompensated   Boolean  @default(false) // Whether late arrival is compensated (no fine)
+  intimated       Boolean  @default(false) // Whether absence was intimated
+  intimatedReason String?  // Reason for intimated absence
+  notes           String?
+  source          String   @default("manual") // manual, biometric, excel_import
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([employeeId, date])
+}
+
+// Leave Request
+model LeaveRequest {
+  id                String   @id @default(cuid())
+  employeeId        String
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType         String   // annual, sick, complementary, unpaid, maternity, umrah
+  startDate         DateTime
+  endDate           DateTime
+  totalDays         Int
+  reason            String   @db.Text
+  status            String   @default("pending") // pending, manager_approved, approved, rejected
+
+  managerComment    String?  @db.Text
+  managerApprovedBy String?
+  managerApprovedAt DateTime?
+
+  hrComment         String?  @db.Text
+  hrApprovedBy      String?
+  hrApprovedAt      DateTime?
+
+  rejectedBy        String?
+  rejectedAt        DateTime?
+  rejectionReason   String?  @db.Text
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Leave Balance
+model LeaveBalance {
+  id            String   @id @default(cuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType     String
+  year          Int
+  totalDays     Int
+  usedDays      Int      @default(0)
+  remainingDays Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([employeeId, leaveType, year])
+}
+
+// Leave Balance History - Archive of past year leave balances
+model LeaveBalanceHistory {
+  id            String   @id @default(cuid())
+  employeeId    String
+  leaveType     String
+  year          Int
+  totalDays     Int
+  usedDays      Int
+  remainingDays Int
+  archivedAt    DateTime @default(now())
+
+  @@index([employeeId, year])
+}
+
+// Employee History - Track all changes to employee records
+model EmployeeHistory {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  field       String   // Field that was changed (e.g., "department", "manager", "designation", "employmentStatus")
+  oldValue    String?  // Previous value (stored as string, can be JSON for complex values)
+  newValue    String?  // New value (stored as string, can be JSON for complex values)
+  changedBy   String   // User ID who made the change
+  changedAt   DateTime @default(now())
+
+  @@index([employeeId])
+  @@index([changedAt])
+}
+
+// Employee Document - Store employee documents metadata
+model EmployeeDocument {
+  id            String   @id @default(cuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  documentType  String   // education, experience, cnic, passport, other
+  fileName      String
+  originalName  String   // Original filename from upload
+  filePath      String   // Storage path (local or S3 key)
+  fileSize      Int      // File size in bytes
+  mimeType      String   // MIME type of the file
+  label         String?  // Custom label for 'other' type documents
+  uploadedBy    String   // User ID who uploaded the document
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([documentType])
+}
+
+// Employee Evaluation - Track tests and interviews during probation
+model EmployeeEvaluation {
+  id             String   @id @default(cuid())
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  evaluationType String   // test, interview
+  name           String   // Name of the test/interview
+  totalMarks     Int?     // Only for tests
+  obtainedMarks  Int?     // Only for tests
+  status         String   // pass, fail
+  notes          String?  @db.Text
+  wasRetaken     Boolean  @default(false) // Checkbox for retake status
+  evaluationDate DateTime @default(now())
+  createdBy      String   // User ID who created the evaluation
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([evaluationType])
+  @@index([status])
+}
+
+// Fine
+model Fine {
+  id                          String    @id @default(cuid())
+  employeeId                  String
+  employee                    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date                        DateTime
+  type                        String    @default("late_arrival") // late_arrival, policy_violation, misconduct, other
+  lateMinutes                 Int       @default(0)
+  reason                      String?   @db.Text
+  amount                      Float
+  status                      String    @default("unpaid") // unpaid, paid, implemented, waived
+  paidAt                      DateTime?
+  waiverReason                String?   @db.Text // Reason for waiving the fine (e.g., grace period)
+  compensationRequested       Boolean   @default(false) // Whether employee requested compensation/waiver
+  compensationReason          String?   @db.Text // Reason for compensation request
+  compensationRequestedAt     DateTime? // When compensation was requested
+  compensationStatus          String?   // pending, approved, rejected
+  compensationApprovedBy      String?   // User ID of admin who approved/rejected
+  compensationApprovedAt      DateTime? // When compensation was approved/rejected
+  compensationRejectionReason String?   @db.Text // Reason for rejection (if rejected)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+}
+
+// Incentive
+model Incentive {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  month       Int
+  year        Int
+  type        String   // punctuality, performance, bonus, other
+  amount      Float
+  description String?  @db.Text
+  awardedBy   String
+  createdAt   DateTime @default(now())
+}
+
+// Notification
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String   @db.Text
+  type      String   // leave_request, leave_approved, leave_rejected, fine_approved, fine_waived, incentive_awarded, attendance_alert
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Audit Log - Comprehensive system activity tracking
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?  // Nullable for system actions or failed login attempts
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName    String?  // Store user name at time of action (preserved even if user deleted)
+  userEmail   String?  // Store email at time of action
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, FAILED_LOGIN, EXPORT, SYNC, APPROVE, REJECT, CANCEL, WAIVE
+  entityType  String   // user, employee, attendance, leave, fine, incentive, settings, department, biometric, export
+  entityId    String?  // Can be null for login/logout or bulk operations
+  description String?  @db.Text // Human-readable description of the action
+  oldValue    String?  @db.LongText // JSON string of previous values
+  newValue    String?  @db.LongText // JSON string of new values
+  ipAddress   String?  // IP address of the user
+  userAgent   String?  @db.Text // Browser/client information
+  context     String?  @db.Text // Additional context (JSON) - e.g., reason for action, affected count for bulk ops
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([createdAt])
+}
+
+// Monthly Deductible Fines - Stores calculated and finalized monthly fine deductions
+model MonthlyDeductibleFine {
+  id                    String   @id @default(cuid())
+  employeeId            String
+  employee              Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  month                 Int      // 1-12
+  year                  Int
+  actualAmount          Float    // Sum of all actual fines for the month
+  deductibleAmount      Float    // Calculated amount (actualAmount * 1 or actualAmount * 2)
+  finalDeductibleAmount Float    // Final amount after manual edits (starts same as deductibleAmount)
+  multiplier            Int      @default(2) // 1 or 2 - the multiplier used for calculation
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([employeeId, month, year])
+  @@index([month, year])
+}
+
+// System Settings
+model SystemSettings {
+  id                        String @id @default("default")
+  companyName               String @default("HR Portal")
+  graceMinutes              Int    @default(15)
+  workingDaysPerWeek        Int    @default(5)
+  punctualityIncentiveAmount Float @default(5000)
+
+  // Daily timings (JSON stored as string) - format: { monday: { startTime: "09:00", endTime: "18:00", isOffDay: false }, ... }
+  dailyTimings              String? @db.Text
+
+  // Leave quotas
+  annualLeaveQuota          Int    @default(15)
+  sickLeaveQuota            Int    @default(12)
+  complementaryLeaveQuota   Int    @default(5)
+  unpaidLeaveQuota          Int    @default(0)
+  maternityLeaveQuota       Int    @default(180)
+  umrahLeaveQuota           Int    @default(15)
+
+  // Fine rules (JSON stored as string)
+  fineRules                 String @db.Text
+
+  updatedAt                 DateTime @updatedAt
+}
