@@ -120,6 +120,19 @@ export async function POST(request: NextRequest) {
       include: { user: true },
     });
 
+    // Prevent duplicate fines for the same employee/date/type
+    const existingFine = await prisma.fine.findFirst({
+      where: {
+        employeeId,
+        date: new Date(date),
+        type: type || "late_arrival",
+      },
+    });
+
+    if (existingFine) {
+      return NextResponse.json({ id: existingFine.id });
+    }
+
     const fine = await prisma.fine.create({
       data: {
         employeeId,

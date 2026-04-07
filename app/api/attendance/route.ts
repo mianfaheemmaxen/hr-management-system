@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { calculateFineAmount } from "@/lib/attendance-utils";
 import { logAttendanceEvent } from "@/lib/audit-logger";
 
 // GET attendance records
@@ -185,6 +186,66 @@ export async function POST(request: NextRequest) {
         source: records[0]?.source || "manual",
       },
     });
+
+    // Auto-generate fines for late attendance records
+    const settings = await prisma.systemSettings.findUnique({ where: { id: "default" } });
+    if (settings) {
+      const fineRules: any[] = settings.fineRules ? JSON.parse(settings.fineRules as string) : [];
+
+      for (const record of results) {
+        if (record.status === "late" && record.lateMinutes > 0 && !record.isCompensated) {
+          const fineAmount = calculateFineAmount(record.lateMinutes, fineRules);
+          if (fineAmount > 0) {
+            // Grace period check: <=5 minutes late, first 3 times per month are auto-waived
+            let shouldAutoWaive = false;
+            let graceCount = 0;
+
+            if (record.lateMinutes <= 5) {
+              const currentDate = new Date(record.date);
+              const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+              const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+              const lateWithin5MinCount = await prisma.attendanceRecord.count({
+                where: {
+                  employeeId: record.employeeId,
+                  date: { gte: monthStart, lte: monthEnd, not: record.date },
+                  status: "late",
+                  lateMinutes: { gt: 0, lte: 5 },
+                },
+              });
+
+              if (lateWithin5MinCount < 3) {
+                shouldAutoWaive = true;
+                graceCount = lateWithin5MinCount + 1;
+              }
+            }
+
+            // Only create fine if one doesn't already exist for this employee/date/type
+            const existingFine = await prisma.fine.findFirst({
+              where: { employeeId: record.employeeId, date: record.date, type: "late_arrival" },
+            });
+
+            if (!existingFine) {
+              const fineData: any = {
+                employeeId: record.employeeId,
+                date: record.date,
+                type: "late_arrival",
+                lateMinutes: record.lateMinutes,
+                reason: `Late arrival by ${record.lateMinutes} minutes`,
+                amount: fineAmount,
+                status: shouldAutoWaive ? "waived" : "implemented",
+              };
+
+              if (shouldAutoWaive) {
+                fineData.waiverReason = `Grace period - late within 5 minutes (${graceCount} of 3 monthly allowance)`;
+              }
+
+              await prisma.fine.create({ data: fineData });
+            }
+          }
+        }
+      }
+    }
 
     return NextResponse.json({ count: results.length });
   } catch (error) {

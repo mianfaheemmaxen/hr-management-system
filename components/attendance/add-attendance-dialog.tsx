@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { calculateLateMinutes, determineAttendanceStatus, getOfficeStartTimeForDate, calculateFineAmount } from "@/lib/attendance-utils";
+import { calculateLateMinutes, determineAttendanceStatus, getOfficeStartTimeForDate } from "@/lib/attendance-utils";
 import { format } from "date-fns";
 
 interface AddAttendanceDialogProps {
@@ -211,47 +211,10 @@ export function AddAttendanceDialog({
       });
 
       if (response.ok) {
-        // Generate fine if employee is late and not compensated
-        if (formData.lateMinutes > 0) {
-          const fineAmount = calculateFineAmount(formData.lateMinutes, settings.fineRules || []);
-          if (fineAmount > 0) {
-            try {
-              await fetch("/api/fines", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  employeeId: formData.employeeId,
-                  date: formData.date,
-                  type: "late_arrival",
-                  amount: fineAmount,
-                  reason: `Late arrival by ${formData.lateMinutes} minutes`,
-                  lateMinutes: formData.lateMinutes,
-                  status: "unpaid",
-                }),
-              });
-              showAlert({
-                type: "success",
-                message: `Attendance record added successfully. Fine of Rs.${fineAmount} generated for ${formData.lateMinutes} minutes late.`,
-              });
-            } catch (fineError) {
-              console.error("Failed to generate fine:", fineError);
-              showAlert({
-                type: "success",
-                message: "Attendance record added successfully, but failed to generate fine.",
-              });
-            }
-          } else {
-            showAlert({
-              type: "success",
-              message: "Attendance record added successfully",
-            });
-          }
-        } else {
-          showAlert({
-            type: "success",
-            message: "Attendance record added successfully",
-          });
-        }
+        showAlert({
+          type: "success",
+          message: "Attendance record added successfully",
+        });
 
         onOpenChange(false);
         if (onSuccess) {
