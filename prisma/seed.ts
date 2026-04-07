@@ -40,10 +40,10 @@ async function main() {
 
   // Super Admin
   const adminUser = await prisma.user.upsert({
-    where: { email: "admin@company.com" },
+    where: { email: "admin@maxenpower.com" },
     update: {},
     create: {
-      email: "admin@company.com",
+      email: "admin@maxenpower.com",
       password: adminPassword,
       firstName: "System",
       lastName: "Admin",
@@ -62,10 +62,10 @@ async function main() {
 
   // HR Manager
   const hrUser = await prisma.user.upsert({
-    where: { email: "sarah.hr@company.com" },
+    where: { email: "sarah.hr@maxenpower.com" },
     update: {},
     create: {
-      email: "sarah.hr@company.com",
+      email: "sarah.hr@maxenpower.com",
       password: hrPassword,
       firstName: "Sarah",
       lastName: "Johnson",
@@ -84,10 +84,10 @@ async function main() {
 
   // Tech Manager
   const techManagerUser = await prisma.user.upsert({
-    where: { email: "john.tech@company.com" },
+    where: { email: "john.tech@maxenpower.com" },
     update: {},
     create: {
-      email: "john.tech@company.com",
+      email: "john.tech@maxenpower.com",
       password: managerPassword,
       firstName: "John",
       lastName: "Smith",
@@ -111,11 +111,11 @@ async function main() {
 
   // Regular Employees
   const employees = [
-    { email: "alice.dev@company.com", firstName: "Alice", lastName: "Brown", code: "EMP004", designation: "Senior Developer" },
-    { email: "bob.dev@company.com", firstName: "Bob", lastName: "Wilson", code: "EMP005", designation: "Developer" },
-    { email: "carol.dev@company.com", firstName: "Carol", lastName: "Davis", code: "EMP006", designation: "Junior Developer" },
-    { email: "david.qa@company.com", firstName: "David", lastName: "Miller", code: "EMP007", designation: "QA Engineer" },
-    { email: "eva.design@company.com", firstName: "Eva", lastName: "Taylor", code: "EMP008", designation: "UI Designer" },
+    { email: "alice.dev@maxenpower.com", firstName: "Alice", lastName: "Brown", code: "EMP004", designation: "Senior Developer" },
+    { email: "bob.dev@maxenpower.com", firstName: "Bob", lastName: "Wilson", code: "EMP005", designation: "Developer" },
+    { email: "carol.dev@maxenpower.com", firstName: "Carol", lastName: "Davis", code: "EMP006", designation: "Junior Developer" },
+    { email: "david.qa@maxenpower.com", firstName: "David", lastName: "Miller", code: "EMP007", designation: "QA Engineer" },
+    { email: "eva.design@maxenpower.com", firstName: "Eva", lastName: "Taylor", code: "EMP008", designation: "UI Designer" },
   ];
 
   for (const emp of employees) {
