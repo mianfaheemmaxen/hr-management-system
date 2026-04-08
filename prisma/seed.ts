@@ -144,13 +144,16 @@ async function main() {
   console.log("✅ Users and employees created");
 
   // Create system settings
+  // Fine rules MUST use minMinutes / maxMinutes — these are the field names
+  // read by calculateFineAmount() in lib/attendance-utils.ts.
+  // maxMinutes: null means "no upper bound" (catches any lateness above minMinutes).
   const defaultFineRules = JSON.stringify([
-    { minLateMinutes: 5, maxLateMinutes: 14, amount: 1000 },
-    { minLateMinutes: 15, maxLateMinutes: 29, amount: 2000 },
-    { minLateMinutes: 30, maxLateMinutes: 59, amount: 3000 },
-    { minLateMinutes: 60, maxLateMinutes: 119, amount: 4000 },
-    { minLateMinutes: 120, maxLateMinutes: 180, amount: 5000 },
-    { minLateMinutes: 181, maxLateMinutes: 999, amount: 10000 },
+    { minMinutes: 5,   maxMinutes: 14,  amount: 1000 },
+    { minMinutes: 15,  maxMinutes: 29,  amount: 2000 },
+    { minMinutes: 30,  maxMinutes: 59,  amount: 3000 },
+    { minMinutes: 60,  maxMinutes: 119, amount: 4000 },
+    { minMinutes: 120, maxMinutes: 180, amount: 5000 },
+    { minMinutes: 181, maxMinutes: null, amount: 10000 },
   ]);
 
   await prisma.systemSettings.upsert({
