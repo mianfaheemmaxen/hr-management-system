@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "tsx server.ts",
     "lint": "eslint",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:reset": "npx prisma migrate reset --force && npm run db:seed"
