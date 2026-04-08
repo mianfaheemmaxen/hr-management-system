@@ -9,7 +9,7 @@
 
 */
 -- AlterTable
-ALTER TABLE `fine` DROP COLUMN `approvedAt`,
+ALTER TABLE `Fine` DROP COLUMN `approvedAt`,
     DROP COLUMN `approvedBy`,
     DROP COLUMN `waiveReason`,
     DROP COLUMN `waivedAt`,
